@@ -1,0 +1,32 @@
+{
+  "metrics": {
+    "precision": 0.5273972602739726,
+    "recall": 0.825,
+    "f1": 0.6434540389972145,
+    "roc_auc": 0.8539641471077434
+  },
+  "churn_rate": 0.2654577233996067,
+  "positive_rate": 0.41595441595441596,
+  "raw_missing_rate": {
+    "gender": 0.0,
+    "SeniorCitizen": 0.0,
+    "Partner": 0.0,
+    "Dependents": 0.0,
+    "tenure": 0.0,
+    "PhoneService": 0.0,
+    "MultipleLines": 0.0,
+    "InternetService": 0.0,
+    "Contract": 0.0,
+    "PaperlessBilling": 0.0,
+    "PaymentMethod": 0.0,
+    "MonthlyCharges": 0.0,
+    "TotalCharges": 0.001529386060738475,
+    "OnlineSecurity": 0.0,
+    "OnlineBackup": 0.0,
+    "DeviceProtection": 0.0,
+    "TechSupport": 0.0,
+    "StreamingTV": 0.0,
+    "StreamingMovies": 0.0
+  },
+  "n_reference": 4577
+}

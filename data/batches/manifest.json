@@ -1,0 +1,27 @@
+[
+  {
+    "file": "batch_1_normal.csv",
+    "title": "Batch 1 - Normal",
+    "description": "Same population as training. Expect: no alerts."
+  },
+  {
+    "file": "batch_2_mild_drift.csv",
+    "title": "Batch 2 - Mild drift",
+    "description": "More high-charge customers. Expect: moderate drift in charge features."
+  },
+  {
+    "file": "batch_3_strong_drift.csv",
+    "title": "Batch 3 - Strong drift",
+    "description": "Many more annual contracts + high charges. Expect: strong drift; performance may or may not drop."
+  },
+  {
+    "file": "batch_4_concept_drift.csv",
+    "title": "Batch 4 - Concept drift",
+    "description": "Inputs look normal but churn behaviour changed. Expect: no input drift, performance drops."
+  },
+  {
+    "file": "batch_5_data_quality.csv",
+    "title": "Batch 5 - Data quality issues",
+    "description": "30% missing charges, duplicates, unseen payment method. Expect: quality alerts."
+  }
+]
