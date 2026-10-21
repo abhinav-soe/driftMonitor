@@ -1,46 +1,218 @@
 # ML Model Monitoring & Drift Detection
 
-Monitors a deployed churn model: validates incoming data, detects feature and prediction drift,
-tracks performance when labels arrive, and raises actionable alerts in a Streamlit dashboard.
+An ML monitoring system for a customer churn prediction model. The project simulates production data batches, validates incoming data, detects feature and prediction drift, tracks model performance when ground-truth labels become available, and surfaces actionable alerts through a Streamlit dashboard.
 
-## Run
+It demonstrates an important distinction in production machine learning: **detecting a change in the data is not the same as proving that a model's performance has degraded.**
+
+## Features
+
+- **Data quality monitoring:** Check schema, missing-value rates, duplicate records, unseen categories, and out-of-range values.
+- **Feature drift detection:** Apply Kolmogorov–Smirnov (KS) tests to numeric features and chi-square tests to categorical features.
+- **Effect-size monitoring:** Use the Population Stability Index (PSI) to distinguish statistically significant changes from changes that are practically meaningful.
+- **Prediction drift detection:** Monitor predicted probabilities using KS tests and PSI, as well as changes in the predicted churn rate.
+- **Delayed-label performance monitoring:** Compare precision, recall, F1-score, and ROC-AUC against baseline metrics when actual labels become available.
+- **Simulated production batches:** Generate five controlled scenarios covering normal operation, mild drift, strong drift, concept drift, and data-quality problems.
+- **Interactive dashboard:** Review monitoring results and alerts in Streamlit.
+- **Command-line reporting:** Summarize monitoring results across batches from the terminal.
+- **Automated tests:** Run the project's unit tests using pytest.
+
+## How It Works
+
+The monitoring pipeline follows a baseline-and-observe workflow.
+
+### Phase 1: Establish a baseline
+
+`baseline.py` trains the churn prediction model using the Telco customer churn dataset. It saves the model, reference data, and baseline metrics used by subsequent monitoring runs.
+
+The reference data describes the expected input distribution, while the baseline metrics provide a point of comparison for later performance evaluation.
+
+### Phase 2: Simulate incoming production data
+
+`simulate.py` creates five simulated production batches from a held-out pool that the model did not train on. Each batch represents a different operating condition.
+
+### Phase 3: Validate incoming data
+
+Before cleaning or imputation, the monitoring pipeline checks raw data for quality issues, including:
+
+- Missing values and increases in missing-value rates.
+- Duplicate records.
+- Unseen categorical values.
+- Values outside expected ranges.
+- Schema inconsistencies.
+
+Running quality checks before cleaning helps prevent preprocessing from concealing problems in incoming data.
+
+### Phase 4: Detect feature and prediction drift
+
+The monitoring system compares each batch with the reference distribution.
+
+| Monitoring layer | Method | Requires ground-truth labels? |
+|---|---|---|
+| Data quality | Schema, missingness, duplicates, categories, ranges | No |
+| Numeric feature drift | KS test and PSI | No |
+| Categorical feature drift | Chi-square test and PSI | No |
+| Prediction drift | KS test, PSI, predicted churn rate | No |
+| Model performance | Precision, recall, F1-score, ROC-AUC | Yes |
+
+A feature is flagged when the statistical test is significant at `p < 0.05` **and** PSI reaches the configured threshold:
+
+- **PSI ≥ 0.10:** Moderate drift.
+- **PSI ≥ 0.25:** High drift.
+
+The thresholds are configured in `config.py`.
+
+Using both statistical significance and PSI helps distinguish evidence of a distribution change from the practical magnitude of that change. P-values can flag small differences when sample sizes are large, while PSI provides an additional measure of distribution shift.
+
+### Phase 5: Monitor performance when labels arrive
+
+Input and prediction drift can be monitored without knowing the eventual outcomes. However, evaluating whether the model's predictions remain effective requires ground-truth labels.
+
+When labels become available, the system compares precision, recall, F1-score, and ROC-AUC with the baseline metrics. The dashboard also warns when the number of labelled examples is too small for reliable interpretation.
+
+### Phase 6: Review alerts
+
+The Streamlit dashboard presents monitoring results and alerts so users can investigate changes in data quality, input distributions, predictions, and model performance.
+
+## The Simulated Experiment
+
+The project uses controlled scenarios to demonstrate why drift monitoring needs multiple layers.
+
+| Batch | Scenario | Expected observation |
+|---|---|---|
+| 1 | Normal | No intentional changes; expected healthy operation |
+| 2 | Mild drift | More high-charge customers; moderate feature drift while performance may hold |
+| 3 | Strong drift | More annual contracts and high charges; stronger drift, although performance may remain stable |
+| 4 | Concept drift | Input distributions remain the same while churn behaviour changes; performance may decline |
+| 5 | Data-quality issues | 30% missing charges, duplicate records, and a new payment method trigger quality checks |
+
+These are designed experimental scenarios, not results from a real production deployment.
+
+**Key lesson:** Drift is a warning signal, not proof of model failure. A model can tolerate input drift, and model performance can deteriorate even when the input distribution remains stable.
+
+## Tech Stack
+
+- **Language:** Python
+- **Machine learning:** scikit-learn
+- **Data processing:** pandas and NumPy
+- **Statistical monitoring:** SciPy
+- **Dashboard:** Streamlit
+- **Testing:** pytest
+
+## Getting Started
+
+### Prerequisites
+
+- Python installed in a version compatible with the project dependencies.
+- pip.
+- A Telco customer churn CSV file from your churn prediction project or another compatible source.
+
+### 1. Clone the repository
+
 ```bash
-python -m pip install -r requirements.txt
-# copy your Kaggle Telco CSV from the churn project to data/churn.csv
-python baseline.py          # Phase 1: train model, save reference data + baseline metrics
-python simulate.py          # Phase 2: build 5 simulated production batches
-python run_monitoring.py    # (optional) CLI summary of every batch
-python -m streamlit run app.py
-python -m pytest            # Phase 5: unit tests
+git clone <YOUR_GITHUB_REPOSITORY_URL>
+cd <YOUR_REPOSITORY_DIRECTORY>
 ```
 
-## What is monitored
-| Layer | Method | Needs labels? |
-|---|---|---|
-| Data quality | schema, missing-rate increase, duplicates, unseen categories, out-of-range values | No |
-| Feature drift | KS test (numeric), chi-square (categorical), PSI as effect size | No |
-| Prediction drift | KS + PSI on predicted probabilities, predicted churn rate | No |
-| Performance | precision, recall, F1, ROC-AUC vs baseline | **Yes** |
+Replace the placeholders with your repository URL and directory name.
 
-A feature is flagged only if the test is significant (p < 0.05) **and** PSI >= 0.10 (moderate) / 0.25 (high).
-With thousands of rows, p-values flag trivial changes; PSI supplies the effect size. All thresholds live in `config.py`.
+### 2. Install dependencies
 
-## The simulated experiment
-Batches are drawn from a held-out pool the model never saw. **This is a controlled experiment, not evidence of real-world degradation.**
+```bash
+python -m pip install -r requirements.txt
+```
 
-| Batch | What changes | Expected result |
-|---|---|---|
-| 1 Normal | nothing | healthy |
-| 2 Mild drift | more high-charge customers | moderate drift, performance holds |
-| 3 Strong drift | more annual contracts + high charges | strong drift; performance may hold (covariate shift) |
-| 4 Concept drift | same inputs, different churn behaviour | **no input drift, performance drops** |
-| 5 Data quality | 30% missing charges, duplicates, new payment method | quality alerts |
+### 3. Prepare the dataset
 
-Key lessons: drift is a warning, not proof of failure (batch 3), and stable inputs do not guarantee good
-predictions (batch 4) - which is why label-based performance monitoring is still needed.
+Copy the Telco customer churn CSV from your churn prediction project into:
 
-## Design decisions & limitations
-- Drift tests are written with SciPy so every statistic is explainable; Evidently could be added for extra HTML reports.
-- Quality checks run on raw data *before* cleaning so imputation cannot hide missing values.
-- Batches of ~600 rows give noisy metrics; the dashboard warns when labelled samples are small.
-- No alert de-duplication, scheduling or database yet - natural next steps (cron/Airflow, SQLite history, email/Slack alerts).
+```text
+data/churn.csv
+```
+
+Make sure the dataset's columns and types match the expectations of the baseline training pipeline.
+
+### 4. Train the baseline model
+
+```bash
+python baseline.py
+```
+
+This is Phase 1: it trains the model and saves reference data and baseline metrics for monitoring.
+
+### 5. Generate simulated production batches
+
+```bash
+python simulate.py
+```
+
+This is Phase 2: it generates five simulated batches representing different monitoring scenarios.
+
+### 6. Run the monitoring summary
+
+```bash
+python run_monitoring.py
+```
+
+This optional command-line step summarizes monitoring results across the batches.
+
+### 7. Launch the dashboard
+
+```bash
+python -m streamlit run app.py
+```
+
+Open the local URL displayed in the terminal to explore the monitoring dashboard.
+
+### 8. Run the tests
+
+```bash
+python -m pytest
+```
+
+## Project Structure
+
+The following is a high-level overview of the main scripts described in this project.
+
+| File or directory | Purpose |
+|---|---|
+| `baseline.py` | Train the churn model and save reference data and baseline metrics |
+| `simulate.py` | Generate five simulated production batches |
+| `run_monitoring.py` | Produce a command-line summary of monitoring results |
+| `app.py` | Streamlit dashboard for monitoring and alerts |
+| `config.py` | Configure drift thresholds and monitoring settings |
+| `data/churn.csv` | Input Telco churn dataset |
+| `requirements.txt` | Python dependencies |
+| `tests/` | Unit tests, if present |
+
+Additional files may be used for individual quality checks, drift calculations, and metric comparisons. Refer to the repository's actual file tree for the complete structure.
+
+## Design Decisions
+
+- **Explicit statistical tests:** Drift detection uses SciPy so the underlying statistical calculations are inspectable and explainable.
+- **Statistical significance plus effect size:** Combining p-values with PSI thresholds helps avoid treating every statistically significant change as operationally important.
+- **Raw-data quality checks:** Quality checks run before cleaning so that imputation does not conceal missingness or other incoming-data problems.
+- **Separate drift and performance monitoring:** The system distinguishes distribution changes from actual predictive performance changes.
+- **Configurable thresholds:** Monitoring thresholds are centralized in `config.py`.
+
+## Limitations
+
+- **Controlled simulation:** The generated batches demonstrate expected monitoring behaviour but do not establish that the system has detected degradation in a real production environment.
+- **Small batches:** Batches of approximately 600 rows can produce noisy metric estimates. Performance conclusions should account for the number of labelled examples.
+- **No automated scheduling:** Monitoring runs are initiated manually rather than through a scheduler.
+- **No alert deduplication:** Repeated alerts are not yet consolidated.
+- **No persistent monitoring database:** Historical results are not stored in a database for long-term tracking.
+- **No external notifications:** Email and Slack alerts are potential future extensions, not current capabilities.
+
+## Future Improvements
+
+- Schedule recurring monitoring runs using cron or Airflow.
+- Persist monitoring results and alert history in SQLite or another database.
+- Add alert deduplication and severity-based notification rules.
+- Integrate email or Slack notifications.
+- Evaluate additional drift methods or use a framework such as Evidently for supplementary reports.
+- Add monitoring for data pipelines, model versions, and changes in prediction thresholds.
+- Validate detection behaviour on real production data with delayed ground-truth labels.
+
+## License and Attribution
+
+Add the appropriate license for this repository and retain the required attribution for the dataset and any third-party dependencies you use.
